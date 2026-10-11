@@ -1,0 +1,30 @@
+[
+  {
+    "id": "star_badge",
+    "title": "نشان ستاره‌ای",
+    "description": "یک نشان تزئینی برای پروفایل",
+    "price": 20,
+    "icon": "🌟"
+  },
+  {
+    "id": "green_leaf",
+    "title": "نشان برگ سبز",
+    "description": "نماد رشد و یادگیری",
+    "price": 30,
+    "icon": "🌿"
+  },
+  {
+    "id": "hero_cape",
+    "title": "شنل قهرمان",
+    "description": "یک آیتم تزئینی برای شخصیت بازی",
+    "price": 50,
+    "icon": "🦸"
+  },
+  {
+    "id": "forest_theme",
+    "title": "پس‌زمینه جنگلی",
+    "description": "تغییر ظاهر صفحه قهرمان",
+    "price": 60,
+    "icon": "🌳"
+  }
+]

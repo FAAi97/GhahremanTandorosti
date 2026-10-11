@@ -1,7 +1,13 @@
-
 import streamlit as st
-from game_logic import MISSION, calculate_level, get_mission_reward
 
+from database import (
+    complete_mission,
+    get_completed_missions,
+    get_or_create_player,
+    get_player,
+    save_habit,
+)
+from game_logic import MISSION, calculate_level, get_mission_reward
 
 # =====================================================
 # تنظیمات صفحه
@@ -159,6 +165,26 @@ st.markdown(
 # اطلاعات اولیه بازیکن
 # =====================================================
 
+# -----------------------------
+# بارگذاری بازیکن از پایگاه داده
+# -----------------------------
+if "player_id" not in st.session_state:
+    player = get_or_create_player("player_1")
+    st.session_state.player_id = player["id"]
+    st.session_state.xp = player["xp"]
+    st.session_state.coins = player["coins"]
+    st.session_state.completed_missions = list(
+        get_completed_missions(player["id"])
+    )
+else:
+    player = get_player(st.session_state.player_id)
+    if player is not None:
+        st.session_state.xp = player["xp"]
+        st.session_state.coins = player["coins"]
+        st.session_state.completed_missions = list(
+            get_completed_missions(player["id"])
+        )
+
 defaults = {
     "xp": 0,
     "coins": 0,
@@ -228,25 +254,55 @@ def get_correct_count():
     return count
 
 
+
 def claim_reward_once():
-    """جایزه را در همین نشست فقط یک بار ثبت می‌کند."""
+    """ثبت پاداش مأموریت در پایگاه داده، فقط یک بار."""
 
     if st.session_state.reward_claimed:
         return None
 
     correct_count = get_correct_count()
+    total_questions = len(get_mission_steps())
     reward = get_mission_reward(correct_count)
 
     xp_reward = int(reward.get("xp", 0))
     coin_reward = int(reward.get("coins", 0))
 
+    mission_id = str(
+        MISSION.get("id", MISSION.get("title", "main_mission"))
+    )
+
+    saved = complete_mission(
+        player_id=st.session_state.player_id,
+        mission_id=mission_id,
+        correct_count=correct_count,
+        total_questions=total_questions,
+        xp_awarded=xp_reward,
+        coins_awarded=coin_reward,
+    )
+
+    # اگر این مأموریت قبلاً ثبت شده باشد، پاداش مجدد نده.
+    if not saved:
+        player = get_player(st.session_state.player_id)
+
+        if player is not None:
+            st.session_state.xp = player["xp"]
+            st.session_state.coins = player["coins"]
+
+        st.session_state.reward_claimed = True
+        st.session_state.completed_missions = list(
+            get_completed_missions(st.session_state.player_id)
+        )
+        return None
+
+    # فقط پس از ذخیره موفق، امتیازهای نشست را به‌روزرسانی کن.
     st.session_state.xp += xp_reward
     st.session_state.coins += coin_reward
     st.session_state.reward_claimed = True
 
-    mission_id = MISSION.get("id", MISSION.get("title", "main_mission"))
-    if mission_id not in st.session_state.completed_missions:
-        st.session_state.completed_missions.append(mission_id)
+    st.session_state.completed_missions = list(
+        get_completed_missions(st.session_state.player_id)
+    )
 
     return reward
 
@@ -539,18 +595,32 @@ elif st.session_state.page == "مأموریت‌ها":
                     st.success("آفرین! پاسخ درست است. 🌟")
                 else:
                     st.info("تلاش خوبی بود! از بازخورد این مرحله یاد بگیر. 💚")
+# بازخورد متناسب با گزینه‌ای که بازیکن انتخاب کرده است
+                feedback_data = step.get("feedback", "")
 
-                feedback = step.get("feedback", "")
-                if feedback:
-                    st.markdown(
-                        f"""
-                        <div class="success-note">
-                            <strong>📘 نکته آموزشی:</strong><br>
-                            {feedback}
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
+                if isinstance(feedback_data, list):
+    # اگر برای هر گزینه بازخورد جداگانه تعریف شده باشد
+                    if 0 <= chosen < len(feedback_data):
+                        feedback = feedback_data[chosen]
+                    else:
+                        feedback = "برای این انتخاب بازخوردی تعریف نشده است."
+                else:
+    # اگر یک بازخورد عمومی برای کل مرحله تعریف شده باشد
+                    feedback = feedback_data
+
+                if isinstance(feedback, str) and feedback.strip():
+                    feedback = feedback.replace(r"\u200c", "\u200c")
+
+                st.markdown(
+         f"""
+             <div class="success-note">
+               <strong>📘 نکته آموزشی:</strong>
+                <p>{feedback}</p>
+             </div>
+                 """,
+                unsafe_allow_html=True,
+                )
+
 
                 skill = step.get("skill")
                 if skill:
