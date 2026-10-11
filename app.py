@@ -1,8 +1,12 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import streamlit as st
 
 from database import (
     complete_mission,
     get_completed_missions,
+    get_habits_for_date,
     get_or_create_player,
     get_player,
     save_habit,
@@ -706,31 +710,65 @@ elif st.session_state.page == "مأموریت‌ها":
 # =====================================================
 
 elif st.session_state.page == "عادت‌های من":
+    st.title("🌱 عادت‌های من")
+    st.write("عادت‌های امروزت را علامت بزن تا در بازی ثبت شوند.")
 
-    st.markdown("## 🌿 عادت‌های من")
+    # تاریخ روز بر اساس تقویم میلادی سیستم
+    today = datetime.now(ZoneInfo("Asia/Tehran")).date().isoformat()
 
-    st.markdown(
-        """
-        <div class="panel">
-            <h3>هر روز یک قدم کوچک</h3>
-            <p>
-                می‌توانی عادت‌هایی مانند تحرک، مطالعه، استراحت از صفحه‌نمایش
-                و مراقبت از خود را پیگیری کنی.
-            </p>
-            <p class="small-muted">
-                این بخش فعلاً نمایشی است؛ ثبت روزانه در مرحله بعد اضافه می‌شود.
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    player_id = st.session_state.player_id
+
+    # دریافت عادت‌هایی که برای امروز ذخیره شده‌اند
+    saved_habits = get_habits_for_date(player_id, today)
+
+    habits = [
+        ("reading", "📚 امروز کمی مطالعه کردم"),
+        ("movement", "🏃 امروز تحرک داشتم"),
+        ("water", "💧 امروز به نوشیدن آب توجه کردم"),
+        ("rest", "🌙 امروز به استراحت کافی توجه کردم"),
+    ]
+
+    st.caption(f"تاریخ ثبت: {today}")
+
+    # هر روز کلیدهای جداگانه دارد تا وضعیت روزهای قبل
+    # با وضعیت روز جاری اشتباه نشود.
+    for habit_id, label in habits:
+        widget_key = f"habit_{habit_id}_{today}"
+
+        # مقدار اولیه را فقط یک بار برای هر کلید تعیین کن.
+        if widget_key not in st.session_state:
+            st.session_state[widget_key] = saved_habits.get(
+                habit_id, False
+            )
+
+        st.checkbox(label, key=widget_key)
+
+        # ذخیره وضعیت فعلی در پایگاه داده
+        save_habit(
+            player_id=player_id,
+            habit_id=habit_id,
+            completed=st.session_state[widget_key],
+            log_date=today,
+        )
+
+    completed_count = sum(
+        bool(st.session_state[f"habit_{habit_id}_{today}"])
+        for habit_id, _ in habits
     )
 
-    st.checkbox("📚 امروز کمی مطالعه کردم", key="habit_reading")
-    st.checkbox("🏃 امروز تحرک داشتم", key="habit_movement")
-    st.checkbox("💧 امروز به نوشیدن آب توجه کردم", key="habit_water")
-    st.checkbox("🌙 امروز به استراحت کافی توجه کردم", key="habit_rest")
+    st.progress(completed_count / len(habits))
 
-    st.info("در نسخه فعلی، این گزینه‌ها هنوز امتیاز روزانه ثبت نمی‌کنند.")
+    st.write(
+        f"امروز {completed_count} مورد از "
+        f"{len(habits)} عادت را انجام داده‌ای."
+    )
+
+    if completed_count == len(habits):
+        st.success("آفرین! هر چهار عادت امروزت ثبت شده‌اند.")
+    elif completed_count > 0:
+        st.info("عالیه؛ با ادامه دادن می‌توانی عادت‌های بیشتری ثبت کنی.")
+    else:
+        st.info("برای شروع، هر عادتی را که امروز انجام داده‌ای علامت بزن.")
 
 
 # =====================================================
