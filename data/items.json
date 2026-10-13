@@ -1,30 +1,55 @@
 [
+  
   {
-    "id": "star_badge",
-    "title": "نشان ستاره‌ای",
-    "description": "یک نشان تزئینی برای پروفایل",
-    "price": 20,
-    "icon": "🌟"
+    "id": "shell_badge",
+    "name": "نشان صدف",
+    "description": "نخستین یادگاری از گنجینه‌های خلیج فارس",
+    "price": 15,
+    "rarity": "معمولی",
+    "emoji": "🐚",
+    "image": "assets/items/shell.svg",
+    "category": "گنجینه‌های دریایی"
   },
   {
-    "id": "green_leaf",
-    "title": "نشان برگ سبز",
-    "description": "نماد رشد و یادگیری",
-    "price": 30,
-    "icon": "🌿"
+    "id": "pearl_badge",
+    "name": "نشان مروارید",
+    "description": "نماد ارزش، تلاش و پیشرفت در بازی",
+    "price": 40,
+    "rarity": "کمیاب",
+    "emoji": "🦪",
+    "image": "assets/items/pearl.svg",
+    "category": "گنجینه‌های دریایی"
   },
   {
-    "id": "hero_cape",
-    "title": "شنل قهرمان",
-    "description": "یک آیتم تزئینی برای شخصیت بازی",
-    "price": 50,
-    "icon": "🦸"
-  },
-  {
-    "id": "forest_theme",
-    "title": "پس‌زمینه جنگلی",
-    "description": "تغییر ظاهر صفحه قهرمان",
+    "id": "fisher_badge",
+    "name": "نشان صیاد",
+    "description": "یادآور مهارت و تلاش جامعه صیادی جنوب",
     "price": 60,
-    "icon": "🌳"
+    "rarity": "ویژه",
+    "emoji": "🎣",
+    "image": "assets/items/fisher.svg",
+    "category": "میراث دریایی"
+  },
+  {
+    "id": "lenj_badge",
+    "name": "نشان لنج",
+    "description": "نماد سفر، همکاری و پشتکار",
+    "price": 90,
+    "rarity": "حماسی",
+    "emoji": "⛵",
+    "image": "assets/items/lenj.svg",
+    "category": "میراث دریایی"
+  },
+  {
+    "id": "gulf_treasure",
+    "name": "گنجینه خلیج فارس",
+    "description": "پاداش ویژه برای یک دستاورد مهم",
+    "price": 150,
+    "rarity": "افسانه‌ای",
+    "emoji": "💎",
+    "image": "assets/items/treasure.svg",
+    "category": "گنجینه‌های ویژه"
   }
 ]
+
+

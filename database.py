@@ -263,5 +263,100 @@ def buy_item(player_id, item_id, price):
             connection.rollback()
             raise
 
+def init_shop_db():
+    """ساخت جدول اختصاصی خریدهای بازارچه."""
+    with get_connection() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS shop_purchases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                player_id INTEGER NOT NULL,
+                item_id TEXT NOT NULL,
+                price INTEGER NOT NULL CHECK(price >= 0),
+                purchased_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(player_id, item_id),
+                FOREIGN KEY(player_id) REFERENCES players(id)
+            )
+        """)
+        conn.commit()
+
+
+def get_shop_purchases(player_id):
+    """دریافت شناسه آیتم‌های خریداری‌شده بازیکن."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT item_id
+            FROM shop_purchases
+            WHERE player_id = ?
+            ORDER BY purchased_at DESC
+            """,
+            (player_id,),
+        ).fetchall()
+
+    return {row["item_id"] for row in rows}
+
+
+def buy_shop_item(player_id, item_id, price):
+    """
+    خرید اتمیک یک آیتم.
+    خروجی: (موفقیت، پیام)
+    """
+    if isinstance(price, bool) or not isinstance(price, int) or price < 0:
+        return False, "قیمت آیتم معتبر نیست."
+
+    try:
+        with get_connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+
+            player = conn.execute(
+                "SELECT id, coins FROM players WHERE id = ?",
+                (player_id,),
+            ).fetchone()
+
+            if player is None:
+                conn.rollback()
+                return False, "بازیکن پیدا نشد."
+
+            existing = conn.execute(
+                """
+                SELECT 1
+                FROM shop_purchases
+                WHERE player_id = ? AND item_id = ?
+                """,
+                (player_id, item_id),
+            ).fetchone()
+
+            if existing:
+                conn.rollback()
+                return False, "این نشان را قبلاً خریده‌ای."
+
+            if player["coins"] < price:
+                conn.rollback()
+                return False, "سکه کافی نداری؛ مأموریت‌های بیشتری انجام بده."
+
+            conn.execute(
+                "UPDATE players SET coins = coins - ? WHERE id = ?",
+                (price, player_id),
+            )
+
+            conn.execute(
+                """
+                INSERT INTO shop_purchases (player_id, item_id, price)
+                VALUES (?, ?, ?)
+                """,
+                (player_id, item_id, price),
+            )
+
+            conn.commit()
+
+        return True, "خرید موفق بود! این گنجینه به مجموعه‌ات اضافه شد."
+
+    except Exception:
+        return False, "خرید ثبت نشد. دوباره تلاش کن."
+
+
+# ساخت جدول هنگام بارگذاری ماژول
+init_shop_db()
+
 
 init_db()

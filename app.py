@@ -1,21 +1,68 @@
+import json
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import streamlit as st
 
 from database import (
+    buy_shop_item,
     complete_mission,
     get_completed_missions,
     get_habits_for_date,
     get_or_create_player,
     get_player,
+    get_purchases,
+    get_shop_purchases,
     save_habit,
 )
 from game_logic import MISSION, calculate_level, get_mission_reward
 
 # =====================================================
+# تابع برای بارگذاری آیتم‌ها
+# =====================================================
+
+# مسیر اصلی پروژه
+BASE_DIR = Path(__file__).resolve().parent
+
+# مسیر فایل آیتم‌های فروشگاه
+ITEMS_FILE = BASE_DIR / "data" / "items.json"
+
+def load_shop_items():
+    """خواندن و اعتبارسنجی آیتم‌های بازارچه."""
+    with ITEMS_FILE.open("r", encoding="utf-8") as file:
+        items = json.load(file)
+
+    if not isinstance(items, list):
+        raise ValueError("ساختار فایل آیتم‌ها معتبر نیست.")
+
+    seen_ids = set()
+
+    for item in items:
+        if not isinstance(item, dict):
+            raise ValueError("اطلاعات یک آیتم معتبر نیست.")
+
+        for field in ("id", "name", "description", "price"):
+            if field not in item:
+                raise ValueError(f"فیلد {field} در یک آیتم وجود ندارد.")
+
+        if not isinstance(item["id"], str) or not item["id"].strip():
+            raise ValueError("شناسه آیتم باید رشته‌ای غیرخالی باشد.")
+
+        if item["id"] in seen_ids:
+            raise ValueError(f"شناسه تکراری: {item['id']}")
+
+        seen_ids.add(item["id"])
+
+        price = item["price"]
+        if isinstance(price, bool) or not isinstance(price, int) or price < 0:
+            raise ValueError(f"قیمت آیتم {item['id']} معتبر نیست.")
+
+    return items
+# =====================================================
 # تنظیمات صفحه
 # =====================================================
+
 
 st.set_page_config(
     page_title="قهرمانان تندرستی",
@@ -359,7 +406,15 @@ with st.sidebar:
 # =====================================================
 # اطلاعات بالای صفحات
 # =====================================================
+current_player = get_player(st.session_state.player_id)
 
+if current_player is not None:
+    st.session_state.xp = current_player["xp"]
+    st.session_state.coins = current_player["coins"]
+    st.session_state.completed_missions = list(
+        get_completed_missions(current_player["id"])
+    ) 
+    
 level, level_progress = get_level_progress(st.session_state.xp)
 
 st.markdown(
@@ -775,42 +830,144 @@ elif st.session_state.page == "عادت‌های من":
 # صفحه فروشگاه
 # =====================================================
 
-elif st.session_state.page == "فروشگاه":
-
-    st.markdown("## 🛍️ فروشگاه قهرمان")
-
-    st.markdown(
-        """
-        <div class="panel">
-            <h3>🎨 وسایل و ظاهرهای ویژه</h3>
-            <p>در نسخه‌های بعدی می‌توانی با سکه‌ها، آیتم‌های تزئینی بخری.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+elif st.session_state.page == "فروشگاه":   
+    st.markdown("## 🐚 بازارچه گنجینه‌های خلیج فارس")
+    st.write(
+        "نشان‌های دریایی و یادگاری‌های هرمزگان را "
+        "با سکه‌های مأموریت‌ها جمع‌آوری کن."
     )
 
-    shop_items = [
-        ("🌟", "نشان ستاره‌ای", 20),
-        ("🌿", "نشان برگ سبز", 30),
-        ("🏅", "نشان قهرمان", 50),
+    player = get_player(st.session_state.player_id)
+
+    if player is None:
+        st.error("اطلاعات بازیکن پیدا نشد.")
+        st.stop()
+
+    # منبع موجودی، پایگاه داده است.
+    st.session_state.coins = player["coins"]
+    st.metric("🪙 موجودی سکه", player["coins"])
+
+    try:
+        items = load_shop_items()
+        owned_items = get_shop_purchases(player["id"])
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        st.error(f"بارگذاری فروشگاه ناموفق بود: {error}")
+        st.stop()
+
+    rarities = ["همه"] + list(dict.fromkeys(
+        item.get("rarity", "معمولی") for item in items
+    ))
+
+    selected_rarity = st.selectbox(
+        "فیلتر بر اساس کمیابی",
+        rarities,
+        key="shop_rarity_filter",
+    )
+
+    if selected_rarity != "همه":
+        items = [
+            item for item in items
+            if item.get("rarity", "معمولی") == selected_rarity
+        ]
+
+    if not items:
+        st.info("در این دسته هنوز آیتمی وجود ندارد.")
+
+    columns = st.columns(2)
+
+    for index, item in enumerate(items):
+        with columns[index % 2]:
+            with st.container(border=True):
+
+                image_value = item.get("image", "")
+                image_path = BASE_DIR / image_value
+
+                if (
+                    image_value
+                    and image_path.is_file()
+                    and image_path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}
+                ):
+                    st.image(str(image_path), use_container_width=True)
+                elif (
+                    image_value
+                    and image_path.is_file()
+                    and image_path.suffix.lower() == ".svg"
+                ):
+                    st.image(str(image_path), width=160)
+                else:
+                    st.markdown(
+                        f"<div style='font-size:64px;text-align:center'>"
+                        f"{item.get('emoji', '🐚')}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                st.subheader(item["name"])
+                st.caption(
+                    f"{item.get('category', 'گنجینه‌ها')} | "
+                    f"کمیابی: {item.get('rarity', 'معمولی')}"
+                )
+                st.write(item["description"])
+                st.write(f"**قیمت: 🪙 {item['price']} سکه**")
+
+                item_id = item["id"]
+
+                if item_id in owned_items:
+                    st.success("✅ در مجموعه شما")
+                elif st.session_state.coins < item["price"]:
+                    st.button(
+                        "سکه کافی نیست",
+                        key=f"shop_unavailable_{item_id}",
+                        disabled=True,
+                        use_container_width=True,
+                    )
+                else:
+                    if st.button(
+                        "🛒 خرید نشان",
+                        key=f"shop_buy_{item_id}",
+                        type="primary",
+                        use_container_width=True,
+                    ):
+                        success, message = buy_shop_item(
+                            player_id=player["id"],
+                            item_id=item_id,
+                            price=item["price"],
+                        )
+
+                        if success:
+                            st.success(message)
+                        else:
+                            st.warning(message)
+
+                        # موجودی و مالکیت را از پایگاه داده تازه‌سازی کن.
+                        refreshed_player = get_player(player["id"])
+                        if refreshed_player is not None:
+                            st.session_state.coins = refreshed_player["coins"]
+
+                        st.rerun()
+
+    st.divider()
+    st.subheader("🎒 گنجینه‌های جمع‌آوری‌شده")
+    st.write(f"تعداد نشان‌های این مجموعه: {len(owned_items)} از ۵")
+
+    owned_catalog = [
+        item for item in load_shop_items()
+        if item["id"] in owned_items
     ]
 
-    for emoji, item_name, price in shop_items:
-        with st.container(border=True):
-            col1, col2, col3 = st.columns([1, 3, 2])
-            with col1:
-                st.subheader(emoji)
-            with col2:
-                st.write(f"**{item_name}**")
-                st.caption(f"قیمت: {price} سکه")
-            with col3:
-                st.button(
-                    "به‌زودی",
-                    key=f"shop_{item_name}",
-                    disabled=True,
-                    use_container_width=True,
-                )
+    if owned_catalog:
+        inventory_columns = st.columns(3)
 
+        for index, item in enumerate(owned_catalog):
+            with inventory_columns[index % 3]:
+                st.markdown(
+                    f"### {item.get('emoji', '🐚')} {item['name']}"
+                )
+                st.caption(item.get("rarity", "معمولی"))
+    else:
+        st.info(
+            "هنوز نشانی جمع‌آوری نکرده‌ای. "
+            "اولین گنجینه‌ات را از بازارچه بخر!"
+        )
 
 # =====================================================
 # صفحه افتخارات
@@ -844,3 +1001,4 @@ elif st.session_state.page == "افتخارات":
 
 st.markdown("---")
 st.caption("قهرمانان تندرستی | یادگیری، بازی و انتخاب‌های سالم 🌱")
+
